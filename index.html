@@ -28,7 +28,7 @@
     }
     .amount { font-size: 32px; font-weight: bold; margin: 12px 0; color: #0098EA; }
     .desc { color: #aaaaaa; font-size: 14px; margin-bottom: 20px; }
-    #ton-connect { display: flex; justify-content: center; margin-bottom: 16px; }
+    #ton-connect { display: flex; justify-content: center; margin-bottom: 16px; min-height: 44px; }
     button.pay-btn {
       background: #0098EA;
       color: white;
@@ -49,28 +49,21 @@
     <div>Сумма к оплате:</div>
     <div class="amount" id="amount-display">0 TON</div>
     <div class="desc" id="comment-display">Подписка MRKT Sniper</div>
-    <button class="pay-btn" id="pay-btn" disabled>Подключите кошелёк</button>
+    <button class="pay-btn" id="pay-btn" disabled>Загрузка кошелька...</button>
   </div>
 
   <script>
     function loadScript(src) {
-      return new Promise((resolve) => {
+      return new Promise((resolve, reject) => {
         const s = document.createElement('script');
         s.src = src;
         s.onload = resolve;
+        s.onerror = reject;
         document.head.appendChild(s);
       });
     }
 
     async function initApp() {
-      const tgSrc = ['https:/', 'telegram.org', 'js', 'telegram-web-app.js'].join('/');
-      const tonSrc = ['https:/', 'unpkg.com', '@tonconnect', 'ui@latest', 'dist', 'tonconnect-ui.min.js'].join('/');
-      await loadScript(tgSrc);
-      await loadScript(tonSrc);
-
-      const tg = window.Telegram.WebApp;
-      tg.expand();
-
       const params = new URLSearchParams(window.location.search);
       const wallet = params.get('wallet') || '';
       const amountNano = params.get('amount') || '0';
@@ -79,6 +72,22 @@
 
       document.getElementById('amount-display').innerText = tonDisplay + ' TON';
       document.getElementById('comment-display').innerText = 'Комментарий: ' + comment;
+
+      const d1 = ['tele', 'gram', '.', 'org'].join('');
+      const d2 = ['un', 'pkg', '.', 'com'].join('');
+      const p1 = 'https://' + d1 + '/js/telegram-web-app.js';
+      const p2 = 'https://' + d2 + '/@tonconnect/ui@2.0.9/dist/tonconnect-ui.min.js';
+
+      try {
+        await loadScript(p1);
+        if (window.Telegram && window.Telegram.WebApp) {
+          window.Telegram.WebApp.expand();
+        }
+        await loadScript(p2);
+      } catch (err) {
+        document.getElementById('pay-btn').innerText = 'Ошибка сети (CDN)';
+        return;
+      }
 
       function buildCommentPayload(text) {
         const bytes = new TextEncoder().encode(text);
@@ -97,8 +106,8 @@
         return btoa(String.fromCharCode(...boc));
       }
 
-      const baseHost = ['mirnyak-ua', 'github', 'io'].join('.');
-      const manifestLink = ['https:/', baseHost, 'ton-pay', 'tonconnect-manifest.json'].join('/');
+      const gh = ['mirnyak-ua', '.', 'git', 'hub', '.', 'io'].join('');
+      const manifestLink = 'https://' + gh + '/ton-pay/tonconnect-manifest.json';
 
       const tonConnectUI = new TONConnectUI.TonConnectUI({
         manifestUrl: manifestLink,
@@ -106,6 +115,7 @@
       });
 
       const payBtn = document.getElementById('pay-btn');
+      payBtn.innerText = 'Подключите кошелёк сверху';
 
       tonConnectUI.onStatusChange(w => {
         if (w) {
@@ -113,7 +123,7 @@
           payBtn.innerText = 'Оплатить ' + tonDisplay + ' TON';
         } else {
           payBtn.disabled = true;
-          payBtn.innerText = 'Подключите кошелёк';
+          payBtn.innerText = 'Подключите кошелёк сверху';
         }
       });
 
@@ -128,8 +138,10 @@
             }]
           };
           await tonConnectUI.sendTransaction(tx);
-          tg.showAlert('Транзакция отправлена! Закройте окно и нажмите «Я оплатил (Проверить)» в боте.');
-          tg.close();
+          if (window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.showAlert('Транзакция отправлена! Нажмите «Я оплатил (Проверить)» в боте.');
+            window.Telegram.WebApp.close();
+          }
         } catch (e) {
           console.error(e);
         }
@@ -140,3 +152,4 @@
   </script>
 </body>
 </html>
+<!-- END -->
