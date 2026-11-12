@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Оплата подписки</title>
+  <style>
+    body {
+      background-color: #121212;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      padding: 20px;
+      text-align: center;
+    }
+    .card {
+      background: #1e1e1e;
+      padding: 24px;
+      border-radius: 16px;
+      width: 100%;
+      max-width: 340px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    }
+    .amount { font-size: 32px; font-weight: bold; margin: 12px 0; color: #0098EA; }
+    .desc { color: #aaaaaa; font-size: 14px; margin-bottom: 20px; }
+    #ton-connect { display: flex; justify-content: center; margin-bottom: 16px; }
+    button.pay-btn {
+      background: #0098EA;
+      color: white;
+      border: none;
+      padding: 14px 24px;
+      font-size: 16px;
+      font-weight: 600;
+      border-radius: 12px;
+      width: 100%;
+      cursor: pointer;
+    }
+    button.pay-btn:disabled { background: #333333; color: #777777; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div id="ton-connect"></div>
+    <div>Сумма к оплате:</div>
+    <div class="amount" id="amount-display">0 TON</div>
+    <div class="desc" id="comment-display">Подписка MRKT Sniper</div>
+    <button class="pay-btn" id="pay-btn" disabled>Подключите кошелёк</button>
+  </div>
+
+  <script>
+    function loadScript(src) {
+      return new Promise((resolve) => {
+        const s = document.createElement('script');
+        s.src = src;
+        s.onload = resolve;
+        document.head.appendChild(s);
+      });
+    }
+
+    async function initApp() {
+      const tgSrc = ['https:/', 'telegram.org', 'js', 'telegram-web-app.js'].join('/');
+      const tonSrc = ['https:/', 'unpkg.com', '@tonconnect', 'ui@latest', 'dist', 'tonconnect-ui.min.js'].join('/');
+      await loadScript(tgSrc);
+      await loadScript(tonSrc);
+
+      const tg = window.Telegram.WebApp;
+      tg.expand();
+
+      const params = new URLSearchParams(window.location.search);
+      const wallet = params.get('wallet') || '';
+      const amountNano = params.get('amount') || '0';
+      const comment = params.get('comment') || '';
+      const tonDisplay = (Number(amountNano) / 1e9).toFixed(2).replace(/\.00$/, '');
+
+      document.getElementById('amount-display').innerText = tonDisplay + ' TON';
+      document.getElementById('comment-display').innerText = 'Комментарий: ' + comment;
+
+      function buildCommentPayload(text) {
+        const bytes = new TextEncoder().encode(text);
+        let bitStr = '00000000000000000000000000000000';
+        for (let b of bytes) bitStr += b.toString(2).padStart(8, '0');
+        const dataLen = Math.ceil(bitStr.length / 8);
+        const paddedBits = bitStr.padEnd(dataLen * 8, '0');
+        const arr = [0, dataLen * 2];
+        for (let i = 0; i < dataLen; i++) {
+          arr.push(parseInt(paddedBits.slice(i * 8, (i + 1) * 8), 2));
+        }
+        const boc = new Uint8Array([
+          0xb5, 0xee, 0x9c, 0x72, 0x01, 0x01, 0x01, 0x01,
+          0x00, arr.length + 2, 0x00, 0x00, ...arr
+        ]);
+        return btoa(String.fromCharCode(...boc));
+      }
+
+      const baseHost = ['mirnyak-ua', 'github', 'io'].join('.');
+      const manifestLink = ['https:/', baseHost, 'ton-pay', 'tonconnect-manifest.json'].join('/');
+
+      const tonConnectUI = new TONConnectUI.TonConnectUI({
+        manifestUrl: manifestLink,
+        buttonRootId: 'ton-connect'
+      });
+
+      const payBtn = document.getElementById('pay-btn');
+
+      tonConnectUI.onStatusChange(w => {
+        if (w) {
+          payBtn.disabled = false;
+          payBtn.innerText = 'Оплатить ' + tonDisplay + ' TON';
+        } else {
+          payBtn.disabled = true;
+          payBtn.innerText = 'Подключите кошелёк';
+        }
+      });
+
+      payBtn.addEventListener('click', async () => {
+        try {
+          const tx = {
+            validUntil: Math.floor(Date.now() / 1000) + 600,
+            messages: [{
+              address: wallet,
+              amount: amountNano,
+              payload: buildCommentPayload(comment)
+            }]
+          };
+          await tonConnectUI.sendTransaction(tx);
+          tg.showAlert('Транзакция отправлена! Закройте окно и нажмите «Я оплатил (Проверить)» в боте.');
+          tg.close();
+        } catch (e) {
+          console.error(e);
+        }
+      });
+    }
+
+    initApp();
+  </script>
+</body>
+</html>
