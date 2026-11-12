@@ -79,6 +79,11 @@
       return btoa(String.fromCharCode(...boc));
     }
 
+    const tgHost = ['telegram', 'org'].join('.');
+    const tgScript = document.createElement('script');
+    tgScript.src = 'https://' + tgHost + '/js/telegram-web-app.js';
+    document.head.appendChild(tgScript);
+
     const cdnHost = ['cdn', 'jsdelivr', 'net'].join('.');
     const scriptUrl = 'https://' + cdnHost + '/npm/@tonconnect/ui@2.0.9/dist/tonconnect-ui.min.js';
 
@@ -89,7 +94,8 @@
         const gh = ['mirnyak-ua', 'github', 'io'].join('.');
         const manifestLink = 'https://' + gh + '/ton-pay/tonconnect-manifest.json';
 
-        const tonConnectUI = new TONConnectUI.TonConnectUI({
+        const UI_NS = window.TON_CONNECT_UI || window.TONConnectUI;
+        const tonConnectUI = new UI_NS.TonConnectUI({
           manifestUrl: manifestLink,
           buttonRootId: 'ton-connect'
         });
@@ -118,9 +124,14 @@
               }]
             };
             await tonConnectUI.sendTransaction(tx);
-            alert('Транзакция отправлена! Закройте окно и нажмите «Я оплатил (Проверить)» в боте.');
+            if (window.Telegram && window.Telegram.WebApp) {
+              window.Telegram.WebApp.showAlert('Транзакция отправлена! Нажмите «Я оплатил (Проверить)» в боте.');
+              window.Telegram.WebApp.close();
+            } else {
+              alert('Транзакция отправлена! Закройте окно и нажмите «Я оплатил (Проверить)» в боте.');
+            }
           } catch (e) {
-            alert('Отменено или ошибка: ' + e.message);
+            console.error(e);
           }
         });
       } catch (err) {
