@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Оплата подписки</title>
+  <title>MRKT Sniper Pay</title>
   <style>
     body {
       background-color: #121212;
@@ -49,106 +49,88 @@
     <div>Сумма к оплате:</div>
     <div class="amount" id="amount-display">0 TON</div>
     <div class="desc" id="comment-display">Подписка MRKT Sniper</div>
-    <button class="pay-btn" id="pay-btn" disabled>Загрузка кошелька...</button>
+    <button class="pay-btn" id="pay-btn" disabled>Загрузка TON Connect...</button>
   </div>
 
   <script>
-    function loadScript(src) {
-      return new Promise((resolve, reject) => {
-        const s = document.createElement('script');
-        s.src = src;
-        s.onload = resolve;
-        s.onerror = reject;
-        document.head.appendChild(s);
-      });
+    const params = new URLSearchParams(window.location.search);
+    const wallet = params.get('wallet') || '';
+    const amountNano = params.get('amount') || '0';
+    const comment = params.get('comment') || '';
+    const tonDisplay = (Number(amountNano) / 1e9).toFixed(2).replace(/\.00$/, '');
+
+    document.getElementById('amount-display').innerText = tonDisplay + ' TON';
+    document.getElementById('comment-display').innerText = 'Комментарий: ' + comment;
+
+    function buildCommentPayload(text) {
+      const bytes = new TextEncoder().encode(text);
+      let bitStr = '00000000000000000000000000000000';
+      for (let b of bytes) bitStr += b.toString(2).padStart(8, '0');
+      const dataLen = Math.ceil(bitStr.length / 8);
+      const paddedBits = bitStr.padEnd(dataLen * 8, '0');
+      const arr = [0, dataLen * 2];
+      for (let i = 0; i < dataLen; i++) {
+        arr.push(parseInt(paddedBits.slice(i * 8, (i + 1) * 8), 2));
+      }
+      const boc = new Uint8Array([
+        0xb5, 0xee, 0x9c, 0x72, 0x01, 0x01, 0x01, 0x01,
+        0x00, arr.length + 2, 0x00, 0x00, ...arr
+      ]);
+      return btoa(String.fromCharCode(...boc));
     }
 
-    async function initApp() {
-      const params = new URLSearchParams(window.location.search);
-      const wallet = params.get('wallet') || '';
-      const amountNano = params.get('amount') || '0';
-      const comment = params.get('comment') || '';
-      const tonDisplay = (Number(amountNano) / 1e9).toFixed(2).replace(/\.00$/, '');
+    const cdnHost = ['cdn', 'jsdelivr', 'net'].join('.');
+    const scriptUrl = 'https://' + cdnHost + '/npm/@tonconnect/ui@2.0.9/dist/tonconnect-ui.min.js';
 
-      document.getElementById('amount-display').innerText = tonDisplay + ' TON';
-      document.getElementById('comment-display').innerText = 'Комментарий: ' + comment;
-
-      const d1 = ['tele', 'gram', '.', 'org'].join('');
-      const d2 = ['un', 'pkg', '.', 'com'].join('');
-      const p1 = 'https://' + d1 + '/js/telegram-web-app.js';
-      const p2 = 'https://' + d2 + '/@tonconnect/ui@2.0.9/dist/tonconnect-ui.min.js';
-
+    const s = document.createElement('script');
+    s.src = scriptUrl;
+    s.onload = () => {
       try {
-        await loadScript(p1);
-        if (window.Telegram && window.Telegram.WebApp) {
-          window.Telegram.WebApp.expand();
-        }
-        await loadScript(p2);
-      } catch (err) {
-        document.getElementById('pay-btn').innerText = 'Ошибка сети (CDN)';
-        return;
-      }
+        const gh = ['mirnyak-ua', 'github', 'io'].join('.');
+        const manifestLink = 'https://' + gh + '/ton-pay/tonconnect-manifest.json';
 
-      function buildCommentPayload(text) {
-        const bytes = new TextEncoder().encode(text);
-        let bitStr = '00000000000000000000000000000000';
-        for (let b of bytes) bitStr += b.toString(2).padStart(8, '0');
-        const dataLen = Math.ceil(bitStr.length / 8);
-        const paddedBits = bitStr.padEnd(dataLen * 8, '0');
-        const arr = [0, dataLen * 2];
-        for (let i = 0; i < dataLen; i++) {
-          arr.push(parseInt(paddedBits.slice(i * 8, (i + 1) * 8), 2));
-        }
-        const boc = new Uint8Array([
-          0xb5, 0xee, 0x9c, 0x72, 0x01, 0x01, 0x01, 0x01,
-          0x00, arr.length + 2, 0x00, 0x00, ...arr
-        ]);
-        return btoa(String.fromCharCode(...boc));
-      }
+        const tonConnectUI = new TONConnectUI.TonConnectUI({
+          manifestUrl: manifestLink,
+          buttonRootId: 'ton-connect'
+        });
 
-      const gh = ['mirnyak-ua', '.', 'git', 'hub', '.', 'io'].join('');
-      const manifestLink = 'https://' + gh + '/ton-pay/tonconnect-manifest.json';
+        const payBtn = document.getElementById('pay-btn');
+        payBtn.innerText = 'Подключите кошелёк сверху';
 
-      const tonConnectUI = new TONConnectUI.TonConnectUI({
-        manifestUrl: manifestLink,
-        buttonRootId: 'ton-connect'
-      });
-
-      const payBtn = document.getElementById('pay-btn');
-      payBtn.innerText = 'Подключите кошелёк сверху';
-
-      tonConnectUI.onStatusChange(w => {
-        if (w) {
-          payBtn.disabled = false;
-          payBtn.innerText = 'Оплатить ' + tonDisplay + ' TON';
-        } else {
-          payBtn.disabled = true;
-          payBtn.innerText = 'Подключите кошелёк сверху';
-        }
-      });
-
-      payBtn.addEventListener('click', async () => {
-        try {
-          const tx = {
-            validUntil: Math.floor(Date.now() / 1000) + 600,
-            messages: [{
-              address: wallet,
-              amount: amountNano,
-              payload: buildCommentPayload(comment)
-            }]
-          };
-          await tonConnectUI.sendTransaction(tx);
-          if (window.Telegram && window.Telegram.WebApp) {
-            window.Telegram.WebApp.showAlert('Транзакция отправлена! Нажмите «Я оплатил (Проверить)» в боте.');
-            window.Telegram.WebApp.close();
+        tonConnectUI.onStatusChange(w => {
+          if (w) {
+            payBtn.disabled = false;
+            payBtn.innerText = 'Оплатить ' + tonDisplay + ' TON';
+          } else {
+            payBtn.disabled = true;
+            payBtn.innerText = 'Подключите кошелёк сверху';
           }
-        } catch (e) {
-          console.error(e);
-        }
-      });
-    }
+        });
 
-    initApp();
+        payBtn.addEventListener('click', async () => {
+          try {
+            const tx = {
+              validUntil: Math.floor(Date.now() / 1000) + 600,
+              messages: [{
+                address: wallet,
+                amount: amountNano,
+                payload: buildCommentPayload(comment)
+              }]
+            };
+            await tonConnectUI.sendTransaction(tx);
+            alert('Транзакция отправлена! Закройте окно и нажмите «Я оплатил (Проверить)» в боте.');
+          } catch (e) {
+            alert('Отменено или ошибка: ' + e.message);
+          }
+        });
+      } catch (err) {
+        document.getElementById('pay-btn').innerText = 'Ошибка: ' + err.message;
+      }
+    };
+    s.onerror = () => {
+      document.getElementById('pay-btn').innerText = 'Ошибка загрузки скрипта';
+    };
+    document.head.appendChild(s);
   </script>
 </body>
 </html>
