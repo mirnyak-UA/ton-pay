@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>MRKT Sniper — Отзывы и профиты</title>
+  <script src="https://telegram.org"></script>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --card: #181b24;
+      --border: #262b38;
+      --text: #f3f4f6;
+      --muted: #9ca3af;
+      --accent: #0098ea;
+      --green: #10b981;
+      --gold: #fbbf24;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 16px; padding-bottom: 40px; }
+    .header { background: linear-gradient(135deg, #162238 0%, #181b24 100%); border: 1px solid var(--border); border-radius: 18px; padding: 18px; margin-bottom: 16px; text-align: center; }
+    .header h1 { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+    .header p { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+    .stats { display: flex; justify-content: center; gap: 16px; margin-bottom: 14px; }
+    .stat-box { background: rgba(255,255,255,0.04); padding: 8px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); }
+    .stat-val { font-size: 18px; font-weight: 700; color: var(--gold); }
+    .stat-lbl { font-size: 11px; color: var(--muted); }
+    .btn-primary { width: 100%; background: var(--accent); color: #fff; border: none; border-radius: 12px; padding: 13px; font-size: 15px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+    .btn-primary:active { transform: scale(0.98); opacity: 0.9; }
+    .form-card { display: none; background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 16px; margin-bottom: 18px; }
+    .form-card.open { display: block; }
+    .stars-select { display: flex; gap: 8px; justify-content: center; margin: 10px 0 14px; }
+    .star-btn { font-size: 28px; cursor: pointer; color: #374151; transition: 0.15s; user-select: none; }
+    .star-btn.active { color: var(--gold); transform: scale(1.1); }
+    input, textarea { width: 100%; background: #0f1117; border: 1px solid var(--border); border-radius: 10px; padding: 11px 12px; color: var(--text); font-size: 14px; margin-bottom: 10px; outline: none; }
+    input:focus, textarea:focus { border-color: var(--accent); }
+    .review-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 14px; margin-bottom: 12px; }
+    .rev-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .rev-user { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+    .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
+    .rev-stars { color: var(--gold); font-size: 13px; letter-spacing: 1px; }
+    .profit-badge { display: inline-block; background: rgba(16, 185, 129, 0.14); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.3); font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 8px; margin-bottom: 8px; }
+    .rev-text { font-size: 14px; line-height: 1.45; color: #e5e7eb; margin-bottom: 8px; }
+    .rev-date { font-size: 11px; color: var(--muted); text-align: right; }
+  </style>
+</head>
+<body>
+
+
+  <div class="header">
+    <h1>💎 MRKT Sniper — Отзывы</h1>
+    <p>Реальные профиты пользователей, поймавших NFT подарки</p>
+    <div class="stats">
+      <div class="stat-box">
+        <div class="stat-val" id="avgRating">5.0 ★</div>
+        <div class="stat-lbl">Средняя оценка</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val" id="totalCount">3</div>
+        <div class="stat-lbl">Всего отзывов</div>
+      </div>
+    </div>
+    <button class="btn-primary" onclick="toggleForm()">✍️ Оставить свой отзыв / профит</button>
+  </div>
+
+  <div class="form-card" id="reviewForm">
+    <div style="text-align:center; font-size:13px; color:var(--muted);">Оцените работу снайпера:</div>
+    <div class="stars-select" id="starsBox">
+      <span class="star-btn active" onclick="setStars(1)">★</span>
+      <span class="star-btn active" onclick="setStars(2)">★</span>
+      <span class="star-btn active" onclick="setStars(3)">★</span>
+      <span class="star-btn active" onclick="setStars(4)">★</span>
+      <span class="star-btn active" onclick="setStars(5)">★</span>
+    </div>
+    <input type="text" id="giftInput" placeholder="Что словили и профит (напр: Cyber Wolf | +14.5 TON)" maxlength="60" />
+    <textarea id="textInput" rows="3" placeholder="Напишите ваш отзыв о боте..." maxlength="300"></textarea>
+    <button class="btn-primary" id="submitBtn" onclick="submitReview()">Опубликовать отзыв</button>
+  </div>
+
+  <div id="reviewsList"></div>
+
+
+  <script>
+    const DB_URL = "https://firebaseio.com";
+    const tg = window.Telegram?.WebApp;
+    if (tg) { tg.ready(); tg.expand(); }
+
+    let selectedStars = 5;
+    const defaultReviews = [
+      { name: "Alex_TON", stars: 5, profit: "Eternal Candle (Монохром) | +9.4 TON", text: "Бот прислал уведомление за секунду после выставления, забрал и слил по стакану за 10 минут. Окупил подписку с первой сделки!", date: "Сегодня" },
+      { name: "Dima_Flip", stars: 5, profit: "Spy Agaric | +6.2 TON", text: "Удобно что сразу считает чистую прибыль с комиссией и фильтрует оверпрайсы в стакане.", date: "Вчера" },
+      { name: "KriptoKot", stars: 5, profit: "Lunar Snake (Монохром) | +18.0 TON", text: "Словил редкую модель на бирюзовом фоне, вообще огонь парсер!", date: "2 дня назад" }
+    ];
+
+    function setStars(n) {
+      selectedStars = n;
+      document.querySelectorAll(".star-btn").forEach((el, idx) => {
+        el.classList.toggle("active", idx < n);
+      });
+    }
+
+    function toggleForm() {
+      document.getElementById("reviewForm").classList.toggle("open");
+    }
+
+    function renderReviews(list) {
+      const container = document.getElementById("reviewsList");
+      container.innerHTML = "";
+      let sum = 0;
+      list.forEach(r => {
+        sum += (r.stars || 5);
+        const starsStr = "★".repeat(r.stars || 5) + "☆".repeat(5 - (r.stars || 5));
+        const letter = (r.name || "U").toUpperCase();
+        const card = document.createElement("div");
+        card.className = "review-card";
+        card.innerHTML = `
+          <div class="rev-top">
+            <div class="rev-user"><div class="avatar">${letter}</div><span>${escapeHtml(r.name)}</span></div>
+            <div class="rev-stars">${starsStr}</div>
+          </div>
+          ${r.profit ? `<div class="profit-badge">💰 ${escapeHtml(r.profit)}</div>` : ""}
+          <div class="rev-text">${escapeHtml(r.text)}</div>
+          <div class="rev-date">${escapeHtml(r.date || "")}</div>
+        `;
+        container.appendChild(card);
+      });
+      document.getElementById("totalCount").innerText = list.length;
+      document.getElementById("avgRating").innerText = (sum / list.length).toFixed(1) + " ★";
+    }
+
+    function escapeHtml(str) {
+      return String(str).replace(/[&<>"']/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
+    }
+
+    async function loadReviews() {
+      try {
+        const res = await fetch(`${DB_URL}/reviews.json`);
+        const data = await res.json();
+        if (data) {
+          const arr = Object.values(data).reverse();
+          renderReviews([...arr, ...defaultReviews]);
+        } else {
+          renderReviews(defaultReviews);
+        }
+      } catch (e) {
+        renderReviews(defaultReviews);
+      }
+    }
+
+    async function submitReview() {
+      const profit = document.getElementById("giftInput").value.trim();
+      const text = document.getElementById("textInput").value.trim();
+      if (!text) { alert("Напишите текст отзыва!"); return; }
+      const user = tg?.initDataUnsafe?.user;
+      const userName = user ? (user.username ? `@${user.username}` : user.first_name) : "Пользователь TG";
+      const now = new Date();
+      const dateStr = now.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
+
+      const newRev = { name: userName, stars: selectedStars, profit: profit, text: text, date: dateStr };
+      const btn = document.getElementById("submitBtn");
+      btn.disabled = true;
+      btn.innerText = "Отправка...";
+
+      await fetch(`${DB_URL}/reviews.json`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newRev)
+      });
+
+      document.getElementById("giftInput").value = "";
+      document.getElementById("textInput").value = "";
+      toggleForm();
+      btn.disabled = false;
+      btn.innerText = "Опубликовать отзыв";
+      await loadReviews();
+    }
+
+    loadReviews();
+  </script>
+</body>
+</html>
