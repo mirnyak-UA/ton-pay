@@ -110,7 +110,7 @@
       list.forEach(r => {
         sum += (r.stars || 5);
         const starsStr = "★".repeat(r.stars || 5) + "☆".repeat(5 - (r.stars || 5));
-        const letter = (r.name || "U").toUpperCase();
+        const letter = (r.name || "U").replace(/^@/, "").charAt(0).toUpperCase();
         const card = document.createElement("div");
         card.className = "review-card";
         card.innerHTML = `
